@@ -141,19 +141,13 @@ def unfitness_function(task):
 
 experiment = f'{TASK}-{OPTIMIZER.__name__}'
 
-try:
-    with open(optimizers_path / f'{experiment}.pickle', 'rb') as f:
-        optimizer = pickle.load(f)
-except FileNotFoundError:
-    optimizer = OPTIMIZER(parametrization=LATENT_DIM, budget=BUDGET)
+optimizer = OPTIMIZER(parametrization=LATENT_DIM, budget=BUDGET)
 
 try:
     recommendation = optimizer.minimize(unfitness_function(TASK), verbosity=2)
 finally:
     with open(solutions_path / f'{experiment}.json', 'w') as f:
         j.dump({program.filename: fitness for fitness, program in best_programs}, f)
-    with open(optimizers_path / f'{experiment}.pickle', 'wb') as f:
-        pickle.dump(optimizer, f)
 
     for fitness, program in best_programs:
         if fitness > MIN_FITNESS:
