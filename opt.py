@@ -20,9 +20,7 @@ BUDGET = int(os.environ.get('BUDGET') or '10000')
 
 datasets_path = Path(__file__).parent / 'datasets'
 solutions_path = Path(__file__).parent / 'solutions'
-optimizers_path = Path(__file__).parent / 'optimizers'
 os.makedirs(solutions_path, exist_ok=True)
-os.makedirs(optimizers_path, exist_ok=True)
 
 class SourceFile():
     def __init__(self, code):
