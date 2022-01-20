@@ -132,9 +132,9 @@ def unfitness_function(task):
         try:
             program = decode_vector(vector)
             fitness = test_program(program, test_cases)
+            heappushpop(best_programs, (fitness, program))
         except BackendError:
             fitness = MIN_FITNESS
-        heappushpop(best_programs, (fitness, program))
         return - fitness
 
     return test_vector
