@@ -89,25 +89,34 @@ def disnumerate_prefix(data, prefix):
             break
     return lines
 
-def as_line(line):
-    if isinstance(line, list):
-        return ' '.join(map(str, line))
-    else:
-        return str(line)
+def objects2lines(objects):
+    lines = []
+    for object in objects:
+        if isinstance(object, list):
+            # In competitive programming tasks arrays are represented as:
+            # $ARRAY_LENGTH
+            # $ARRAY_ELEMENT_1, $ARRAY_ELEMENT_2, ..., $ARRAY_ELEMENT_ARRAY_LENGTH
+            lines.append(str(len(object)))
+            lines.append(' '.join(map(str, object)))
+        else:
+            lines.append(str(object))
+    return lines
 
-def load_test_cases(path):
-    with open(path, 'r') as f:
-        for line in f.readlines():
-            test_case = j.loads(line)
-            input_lines = list(map(as_line, disnumerate_prefix(test_case, 'input')))
-            output_lines = list(map(as_line, disnumerate_prefix(test_case, 'output')))
-            yield input_lines, output_lines
+def parse_test_case(test_case_str):
+    test_case = j.loads(test_case_str)
+    input_lines = []
+    output_lines = []
+
+    input_lines, output_lines = (objects2lines(disnumerate_prefix(test_case, prefix)) 
+                                 for prefix in ('input', 'output'))
+    return input_lines, output_lines
 
 def sample_tests(task_name):
-    random_cases = list(load_test_cases(datasets_path / task_name / f'{task_name}-random.json'))
-    edge_cases = list(load_test_cases(datasets_path / task_name / f'{task_name}-edge.json'))
+    random_cases, edge_cases = ((datasets_path / task_name / f'{task_name}-{test_set}.json').read_text().split('\n')
+                                for test_set in ['random', 'edge'])
 
-    return (edge_cases + sample(random_cases, MAX_TESTS))[:MAX_TESTS]
+    selected_cases = (edge_cases + sample(random_cases, MAX_TESTS))[:MAX_TESTS]
+    return map(parse_test_case, selected_cases)
     
 def decode_vector(vector):
     decoding_request = {
