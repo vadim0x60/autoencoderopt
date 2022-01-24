@@ -17,6 +17,7 @@ TASK = os.environ['TASK']
 MIN_FITNESS = float('-inf')
 OPTIMIZER = ng.optimizers.registry[os.environ.get('OPTIMIZER') or 'NGOpt']
 BUDGET = int(os.environ.get('BUDGET') or '10000')
+RANGE = int(os.environ.get('RANGE') or '6')
 
 datasets_path = Path(__file__).parent / 'datasets'
 solutions_path = Path(__file__).parent / 'solutions'
@@ -139,7 +140,7 @@ def unfitness_function(task):
 
 experiment = f'{TASK}-{OPTIMIZER.__name__}'
 
-optimizer = OPTIMIZER(parametrization=LATENT_DIM, budget=BUDGET)
+optimizer = OPTIMIZER(parametrization=ng.p.Array(shape=(LATENT_DIM,), lower=-RANGE, upper=RANGE), budget=BUDGET)
 
 try:
     recommendation = optimizer.minimize(unfitness_function(TASK), verbosity=2)
