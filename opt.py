@@ -113,6 +113,7 @@ def evaluate_vector(vector):
         test_cases = sample_tests(TASK)
         fitness = test_program(program, test_cases)
     except BackendError:
+        program = None
         fitness = MIN_FITNESS
     return program, fitness
 
