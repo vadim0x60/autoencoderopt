@@ -103,7 +103,7 @@ def parse_test_case(test_case_str):
     return input_lines, output_lines
 
 def sample_tests(task_name):
-    random_cases, edge_cases = ((datasets_path / task_name / f'{task_name}-{test_set}.json').read_text().split('\n')
+    random_cases, edge_cases = ((datasets_path / task_name / f'{task_name}-{test_set}.json').read_text().strip().split('\n')
                                 for test_set in ['random', 'edge'])
 
     selected_cases = (edge_cases + sample(random_cases, MAX_TESTS))[:MAX_TESTS]
