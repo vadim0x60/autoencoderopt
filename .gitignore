@@ -2,3 +2,4 @@ datasets
 solutions
 optimizers
 opt.out
+wandb

@@ -2,3 +2,4 @@ deap==1.*
 numpy==1.*
 nevergrad==0.*
 requests==2.*
+wandb==0.*
