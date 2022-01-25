@@ -110,6 +110,7 @@ def decode_vector(vector):
 def evaluate_vector(vector):
     try:
         program = decode_vector(vector)
+        test_cases = sample_tests(TASK)
         fitness = test_program(program, test_cases)
     except BackendError:
         fitness = MIN_FITNESS
@@ -139,25 +140,25 @@ def make_report(optimizer, candidate, program, fitness):
         report["#parents_uids"] = candidate.parents_uids
     return report
 
-wandb.init(project='autoencoderopt')
-wandb.config = {name: globals()[name] for name in ['LATENT_DIM', 'MAX_TESTS', 'TOP_K', 'TASK', 'OPTIMIZER', 'BUDGET', 'RANGE']}
+if __name__ == '__main__':
+    wandb.init(project='autoencoderopt')
+    wandb.config = {name: globals()[name] for name in ['LATENT_DIM', 'MAX_TESTS', 'TOP_K', 'TASK', 'OPTIMIZER', 'BUDGET', 'RANGE']}
 
-experiment = f'{TASK}-{OPTIMIZER.__name__}'
-optimizer = OPTIMIZER(parametrization=ng.p.Array(shape=(LATENT_DIM,), lower=-RANGE, upper=RANGE), budget=BUDGET)
+    experiment = f'{TASK}-{OPTIMIZER.__name__}'
+    optimizer = OPTIMIZER(parametrization=ng.p.Array(shape=(LATENT_DIM,), lower=-RANGE, upper=RANGE), budget=BUDGET)
 
-try:
-    for _ in range(optimizer.budget):
-        candidate = optimizer.ask()
-        test_cases = sample_tests(TASK)
-        program, fitness = evaluate_vector(candidate.value)
+    try:
+        for _ in range(optimizer.budget):
+            candidate = optimizer.ask()
+            program, fitness = evaluate_vector(candidate.value)
 
-        wandb.log(make_report(optimizer, candidate, program, fitness))
+            wandb.log(make_report(optimizer, candidate, program, fitness))
 
-        optimizer.tell(candidate, - fitness)
-finally:
-    recommendation = optimizer.provide_recommendation()
-    program, fitness = evaluate_vector(recommendation.value)
-    wandb.log(make_report(optimizer, recommendation, program, fitness))
-    program = '\n'.join([backend('GET', '/imports'), program])
-    with open(solutions_path / f'{experiment}-{fitness}.json') as f:
-        j.dump(program, f)
+            optimizer.tell(candidate, - fitness)
+    finally:
+        recommendation = optimizer.provide_recommendation()
+        program, fitness = evaluate_vector(recommendation.value)
+        wandb.log(make_report(optimizer, recommendation, program, fitness))
+        program = '\n'.join([backend('GET', '/imports'), program])
+        with open(solutions_path / f'{experiment}-{fitness}.json') as f:
+            j.dump(program, f)
