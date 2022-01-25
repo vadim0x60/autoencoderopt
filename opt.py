@@ -6,6 +6,8 @@ import itertools
 import wandb
 import nevergrad as ng
 from random import sample
+import subprocess
+from heapq import heappush, heappushpop
 
 COMPILE_SERVER_API = os.environ.get('COMPILE_SERVER_API') or 'https://tree2tree.app/api'
 LATENT_DIM = int(os.environ.get('LATENT_DIM') or '150')
@@ -20,32 +22,43 @@ RANGE = int(os.environ.get('RANGE') or '6')
 datasets_path = Path(__file__).parent / 'datasets'
 solutions_path = Path(__file__).parent / 'solutions'
 os.makedirs(solutions_path, exist_ok=True)
-class BackendError(Exception):
-    pass
 
-def backend(method, path, json=None):
-    try:
-        response = requests.request(method, COMPILE_SERVER_API + path, json=json)
-        response.raise_for_status()
-        return response.json()
-    except (requests.exceptions.HTTPError, j.JSONDecodeError) as e:
-        raise BackendError from e
+imports = requests.get(COMPILE_SERVER_API + '/imports').text
+class Program():
+    def __init__(self, uid, source) -> None:
+        self.source_file = solutions_path / f'{uid}.cpp'
+        self.binary_file = solutions_path / f'{uid}.bin'
+        self.persist = False
+        self.uid = uid
 
-class Executable():
-    def __init__(self, source):
-        self.source = source
-        
+        with open(self.source_file, 'w') as f:
+            f.write(imports)
+            f.write('\n\n')
+            f.write(source)
+
+    def __lt__(self, other):
+        return self.uid < other.uid
+
     def __enter__(self):
-        self.binary_name = backend('POST', '/programs', json={'program': self.source})['binary']
+        completed_process = subprocess.run(['g++', str(self.source_file), '-o', str(self.binary_file)], capture_output=True)
+        assert not completed_process.stderr
         return self
 
-    def __exit__(self, exc_type, exc_value, trace):
-        backend('DELETE', f'/programs/{self.binary_name}')
-
     def run(self, input_lines):
-        stdin = '\n'.join(input_lines)
-        stdout = backend('POST', f'/programs/{self.binary_name}/run', json={'input': stdin})['stdout']
-        return stdout.split('\n')
+        completed_process = subprocess.run([str(self.binary_file)],
+                                                input='\n'.join(input_lines).encode(),
+                                                capture_output=True)
+
+        assert not completed_process.stderr
+        self.stdout, self.stderr = completed_process.stdout.decode(), completed_process.stderr.decode()
+        return self.stdout.split('\n')
+
+    def __exit__(self, exc_type, exc_value, trace):
+        self.binary_file.unlink()
+
+    def __del__(self):
+        if not self.persist:
+            self.source_file.unlink()
 
 def correctness(expected_outputs, outputs):
     score = 0
@@ -55,9 +68,8 @@ def correctness(expected_outputs, outputs):
     return score
 
 def test_program(program, test_cases):
-    with Executable(program) as e:
-        test_results = [correctness(output_lines, e.run(input_lines)) for input_lines, output_lines in test_cases]
-        return sum(test_results) / len(test_results)
+    test_results = [correctness(output_lines, program.run(input_lines)) for input_lines, output_lines in test_cases]
+    return sum(test_results) / len(test_results)
 
 def disnumerate_prefix(data, prefix):
     lines = []
@@ -105,21 +117,11 @@ def decode_vector(vector):
         'top_p': 0
     }
 
-    return backend('POST', '/decode', json=decoding_request)['program']
+    decoding_response = requests.post(COMPILE_SERVER_API + '/decode', json=decoding_request)
+    assert decoding_response.ok
+    return decoding_response.json()['program']
 
-def evaluate_vector(vector):
-    try:
-        program = decode_vector(vector)
-        test_cases = sample_tests(TASK)
-        fitness = test_program(program, test_cases)
-    except BackendError:
-        program = None
-        fitness = MIN_FITNESS
-    return program, fitness
-
-best_fitness = MIN_FITNESS
-
-def make_report(optimizer, candidate, program, fitness):
+def make_report(optimizer, candidate, fitness):
     global best_fitness
     best_fitness = max(fitness, best_fitness)
 
@@ -130,7 +132,7 @@ def make_report(optimizer, candidate, program, fitness):
         "#lineage": candidate.heritage["lineage"],
         "#generation": candidate.generation,
         "#parents_uids": [],
-        "#program": program,
+        "#uid": candidate.uid,
         "#fitness": fitness,
         "#best_fitness": best_fitness
     }  
@@ -145,21 +147,44 @@ if __name__ == '__main__':
     wandb.init(project='autoencoderopt')
     wandb.config = {name: globals()[name] for name in ['LATENT_DIM', 'MAX_TESTS', 'TOP_K', 'TASK', 'OPTIMIZER', 'BUDGET', 'RANGE']}
 
+    best_fitness = MIN_FITNESS
+    best_programs = []
+
+    for i in range(TOP_K + 1):
+        heappush(best_programs, (MIN_FITNESS, Program(i, str(i))))
+
+    def evaluate_candidate(candidate):
+        global best_fitness
+        source = decode_vector(candidate.value)
+        try:
+            with Program(candidate.uid, source) as program:
+                test_cases = sample_tests(TASK)
+                fitness = test_program(program, test_cases)
+                best_fitness = max(fitness, best_fitness)
+                heappushpop(best_programs, (fitness, program))
+        except AssertionError:
+            fitness = MIN_FITNESS
+
+        wandb.log(make_report(optimizer, candidate, fitness))
+        return fitness
+
     experiment = f'{TASK}-{OPTIMIZER.__name__}'
     optimizer = OPTIMIZER(parametrization=ng.p.Array(shape=(LATENT_DIM,), lower=-RANGE, upper=RANGE), budget=BUDGET)
 
     try:
         for _ in range(optimizer.budget):
             candidate = optimizer.ask()
-            program, fitness = evaluate_vector(candidate.value)
-
-            wandb.log(make_report(optimizer, candidate, program, fitness))
-
+            fitness = evaluate_candidate(candidate)
             optimizer.tell(candidate, - fitness)
     finally:
         recommendation = optimizer.provide_recommendation()
-        program, fitness = evaluate_vector(recommendation.value)
-        wandb.log(make_report(optimizer, recommendation, program, fitness))
-        program = '\n'.join([backend('GET', '/imports'), program])
-        with open(solutions_path / f'{experiment}-{fitness}.json') as f:
-            j.dump(program, f)
+        fitness = evaluate_candidate(recommendation)
+        summary = {}
+
+        for fitness, program in best_programs:
+            if fitness > MIN_FITNESS:
+                program.persist = True
+                summary[program.uid] = fitness
+
+        with open(solutions_path / f'{experiment}.json') as f:
+            j.dump(summary, f)
