@@ -28,7 +28,6 @@ for config_var, default, constructor in (
 
 datasets_path = Path(__file__).parent / 'datasets'
 solutions_path = Path(__file__).parent / 'solutions' / TASK
-os.makedirs(solutions_path, exist_ok=True)
 
 imports = requests.get(COMPILE_SERVER_API + '/imports').text
 class Program():
@@ -151,7 +150,14 @@ def make_report(optimizer, candidate, fitness):
     return report
 
 if __name__ == '__main__':
-    wandb.init(project='autoencoderopt', config=config)
+    optimizer_path = solutions_path / f'{config["OPTIMIZER"]}.pickle'
+    wandb.init(project='autoencoderopt', config=config, resume=optimizer_path.exists())
+
+    if wandb.run.resumed:
+        optimizer = OPTIMIZER.load(optimizer_path)
+    else:
+        os.makedirs(solutions_path, exist_ok=True)
+        optimizer = OPTIMIZER(parametrization=ng.p.Array(shape=(LATENT_DIM,), lower=-RANGE, upper=RANGE), budget=BUDGET)
 
     best_fitness = MIN_FITNESS
     best_programs = []
@@ -173,9 +179,7 @@ if __name__ == '__main__':
 
         wandb.log(make_report(optimizer, candidate, fitness))
         return fitness
-
-    optimizer = OPTIMIZER(parametrization=ng.p.Array(shape=(LATENT_DIM,), lower=-RANGE, upper=RANGE), budget=BUDGET)
-
+    
     try:
         for _ in range(optimizer.budget):
             candidate = optimizer.ask()
@@ -193,3 +197,5 @@ if __name__ == '__main__':
 
         with open(solutions_path / f'{config["OPTIMIZER"]}.json', 'w') as f:
             j.dump(summary, f)
+
+        optimizer.dump(solutions_path / optimizer_path)
