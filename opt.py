@@ -10,14 +10,21 @@ import subprocess
 from heapq import heappush, heappushpop
 
 COMPILE_SERVER_API = os.environ.get('COMPILE_SERVER_API') or 'https://tree2tree.app/api'
-LATENT_DIM = int(os.environ.get('LATENT_DIM') or '150')
-MAX_TESTS = int(os.environ.get('MAX_TESTS') or '32')
-TOP_K = int(os.environ.get('TOP_K') or '10')
-TASK = os.environ['TASK']
 MIN_FITNESS = float('-inf')
-OPTIMIZER = ng.optimizers.registry[os.environ.get('OPTIMIZER') or 'NGOpt']
-BUDGET = int(os.environ.get('BUDGET') or '10000')
-RANGE = int(os.environ.get('RANGE') or '6')
+
+config = {}
+for config_var, default, constructor in (
+    ('LATENT_DIM', '150', int),
+    ('MAX_TESTS', '32', int),
+    ('TOP_K', '10', int),
+    ('TASK', 'fuel-cost', str),
+    ('TEMPERATURE', '0.5', float),
+    ('OPTIMIZER', 'NGOpt', lambda x: ng.optimizers.registry[x]),
+    ('BUDGET', '10000', int),
+    ('RANGE', '6', int)
+):
+    config[config_var] = os.environ.get(config_var) or default
+    globals()[config_var] = constructor(config[config_var])
 
 datasets_path = Path(__file__).parent / 'datasets'
 solutions_path = Path(__file__).parent / 'solutions'
@@ -144,8 +151,7 @@ def make_report(optimizer, candidate, fitness):
     return report
 
 if __name__ == '__main__':
-    wandb.init(project='autoencoderopt')
-    wandb.config = {name: globals()[name] for name in ['LATENT_DIM', 'MAX_TESTS', 'TOP_K', 'TASK', 'OPTIMIZER', 'BUDGET', 'RANGE']}
+    wandb.init(project='autoencoderopt', config=config)
 
     best_fitness = MIN_FITNESS
     best_programs = []
