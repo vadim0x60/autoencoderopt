@@ -27,7 +27,7 @@ for config_var, default, constructor in (
     globals()[config_var] = constructor(config[config_var])
 
 datasets_path = Path(__file__).parent / 'datasets'
-solutions_path = Path(__file__).parent / 'solutions'
+solutions_path = Path(__file__).parent / 'solutions' / TASK
 os.makedirs(solutions_path, exist_ok=True)
 
 imports = requests.get(COMPILE_SERVER_API + '/imports').text
@@ -174,7 +174,6 @@ if __name__ == '__main__':
         wandb.log(make_report(optimizer, candidate, fitness))
         return fitness
 
-    experiment = f'{TASK}-{OPTIMIZER.__name__}'
     optimizer = OPTIMIZER(parametrization=ng.p.Array(shape=(LATENT_DIM,), lower=-RANGE, upper=RANGE), budget=BUDGET)
 
     try:
@@ -192,5 +191,5 @@ if __name__ == '__main__':
                 program.persist = True
                 summary[program.uid] = fitness
 
-        with open(solutions_path / f'{experiment}.json') as f:
+        with open(solutions_path / f'{config["OPTIMIZER"]}.json', 'w') as f:
             j.dump(summary, f)
