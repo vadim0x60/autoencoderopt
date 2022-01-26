@@ -167,8 +167,8 @@ if __name__ == '__main__':
 
     def evaluate_candidate(candidate):
         global best_fitness
-        source = decode_vector(candidate.value)
         try:
+            source = decode_vector(candidate.value)
             with Program(candidate.uid, source) as program:
                 test_cases = sample_tests(TASK)
                 fitness = test_program(program, test_cases)
@@ -198,4 +198,4 @@ if __name__ == '__main__':
         with open(solutions_path / f'{config["OPTIMIZER"]}.json', 'w') as f:
             j.dump(summary, f)
 
-        optimizer.dump(solutions_path / optimizer_path)
+        optimizer.dump(optimizer_path)
