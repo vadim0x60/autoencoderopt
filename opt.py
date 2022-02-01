@@ -171,7 +171,7 @@ if __name__ == '__main__':
     for i in range(TOP_K + 1):
         heappush(best_programs, (MIN_FITNESS, Program(i, str(i))))
 
-    optimizer.enable_pickling()
+    #optimizer.enable_pickling()
 
     def evaluate_candidate(candidate):
         global best_fitness
