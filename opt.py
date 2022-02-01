@@ -1,3 +1,4 @@
+from calendar import c
 import os
 import requests
 from pathlib import Path
@@ -8,24 +9,35 @@ import nevergrad as ng
 from random import sample
 import subprocess
 from heapq import heappush, heappushpop
+from hashlib import blake2b
 
 COMPILE_SERVER_API = os.environ.get('COMPILE_SERVER_API') or 'https://tree2tree.app/api'
 MIN_FITNESS = float('-inf')
 CHECKPOINT_INTERVAL = os.environ.get('CHECKPOINT_INTERVAL') or 100
 
+h = blake2b(digest_size=8)
 config = {}
+config_str = ''
+
 for config_var, default, constructor in (
     ('LATENT_DIM', '150', int),
     ('MAX_TESTS', '32', int),
     ('TOP_K', '10', int),
-    ('TASK', 'fuel-cost', str),
     ('TEMPERATURE', '0.5', float),
-    ('OPTIMIZER', 'NGOpt', lambda x: ng.optimizers.registry[x]),
     ('BUDGET', '10', int),
-    ('RANGE', '6', int)
+    ('RANGE', '6', int),
+    ('OPTIMIZER', 'NGOpt', lambda x: ng.optimizers.registry[x]),
+    ('TASK', 'fuel-cost', str)
 ):
-    config[config_var] = os.environ.get(config_var) or default
+    config_var_value = os.environ.get(config_var) or default
+
+    config[config_var] = config_var_value
     globals()[config_var] = constructor(config[config_var])
+    if len(config_str) + len(config_var_value) > 31:
+        h.update(config_str.encode())
+        config_str = config_var_value + '-' + h.hexdigest()
+    else:
+        config_str = config_var_value + '-' + config_str
 
 datasets_path = Path(__file__).parent / 'datasets'
 
@@ -150,16 +162,15 @@ def make_report(optimizer, candidate, fitness):
     return report
 
 if __name__ == '__main__':
-    experiment_id = str(hash(str(config)))
     try:
-        wandb.init(project='autoencoderopt', config=config, id=experiment_id)
+        wandb.init(project='autoencoderopt', config=config, id=config_str)
         assert wandb.run.resumed
 
         solutions_path = Path(wandb.run.dir)
         optimizer_path = solutions_path / f'{config["OPTIMIZER"]}.pickle'
         optimizer = OPTIMIZER.load(optimizer_path)
     except (AssertionError, FileNotFoundError):
-        wandb.init(project='autoencoderopt', config=config, id=experiment_id)
+        wandb.init(project='autoencoderopt', config=config, id=config_str)
 
         solutions_path = Path(wandb.run.dir)
         optimizer_path = solutions_path / f'{config["OPTIMIZER"]}.pickle'
@@ -171,7 +182,8 @@ if __name__ == '__main__':
     for i in range(TOP_K + 1):
         heappush(best_programs, (MIN_FITNESS, Program(i, str(i))))
 
-    #optimizer.enable_pickling()
+    if(isinstance(optimizer, ng.optimizers.NGOptBase) and isinstance(optimizer.optim, ng.optimizers.recaster.SequentialRecastOptimizer)):
+        optimizer.optim.enable_pickling()
 
     def evaluate_candidate(candidate):
         global best_fitness
