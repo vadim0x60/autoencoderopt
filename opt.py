@@ -11,6 +11,7 @@ from heapq import heappush, heappushpop
 
 COMPILE_SERVER_API = os.environ.get('COMPILE_SERVER_API') or 'https://tree2tree.app/api'
 MIN_FITNESS = float('-inf')
+CHECKPOINT_INTERVAL = os.environ.get('CHECKPOINT_INTERVAL') or 100
 
 config = {}
 for config_var, default, constructor in (
@@ -170,6 +171,8 @@ if __name__ == '__main__':
     for i in range(TOP_K + 1):
         heappush(best_programs, (MIN_FITNESS, Program(i, str(i))))
 
+    optimizer.enable_pickling()
+
     def evaluate_candidate(candidate):
         global best_fitness
         try:
@@ -202,9 +205,11 @@ if __name__ == '__main__':
         optimizer.dump(optimizer_path)
     
     try:
-        for _ in range(optimizer.budget):
+        for idx in range(optimizer.budget):
             candidate = optimizer.ask()
             fitness = evaluate_candidate(candidate)
             optimizer.tell(candidate, - fitness)
+            if idx % CHECKPOINT_INTERVAL == 0:
+                checkpoint(final=False)
     finally:
         checkpoint(final=True)
