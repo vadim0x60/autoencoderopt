@@ -21,7 +21,7 @@ for config_var, default, constructor in (
     ('TASK', 'fuel-cost', str),
     ('TEMPERATURE', '0.5', float),
     ('OPTIMIZER', 'NGOpt', lambda x: ng.optimizers.registry[x]),
-    ('BUDGET', '10000', int),
+    ('BUDGET', '10', int),
     ('RANGE', '6', int)
 ):
     config[config_var] = os.environ.get(config_var) or default
