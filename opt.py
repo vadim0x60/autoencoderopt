@@ -27,7 +27,6 @@ for config_var, default, constructor in (
     globals()[config_var] = constructor(config[config_var])
 
 datasets_path = Path(__file__).parent / 'datasets'
-solutions_path = Path(__file__).parent / 'solutions' / TASK
 
 imports = requests.get(COMPILE_SERVER_API + '/imports').text
 class Program():
@@ -150,13 +149,18 @@ def make_report(optimizer, candidate, fitness):
     return report
 
 if __name__ == '__main__':
-    optimizer_path = solutions_path / f'{config["OPTIMIZER"]}.pickle'
-    wandb.init(project='autoencoderopt', config=config, resume=optimizer_path.exists())
+    try:
+        wandb.init(project='autoencoderopt', config=config, resume=True)
+        assert wandb.run.resumed
 
-    if wandb.run.resumed:
+        solutions_path = Path(wandb.run.dir)
+        optimizer_path = solutions_path / f'{config["OPTIMIZER"]}.pickle'
         optimizer = OPTIMIZER.load(optimizer_path)
-    else:
-        os.makedirs(solutions_path, exist_ok=True)
+    except (AssertionError, FileNotFoundError):
+        wandb.init(project='autoencoderopt', config=config, resume=False)
+
+        solutions_path = Path(wandb.run.dir)
+        optimizer_path = solutions_path / f'{config["OPTIMIZER"]}.pickle'
         optimizer = OPTIMIZER(parametrization=ng.p.Array(shape=(LATENT_DIM,), lower=-RANGE, upper=RANGE), budget=BUDGET)
 
     best_fitness = MIN_FITNESS
@@ -179,6 +183,22 @@ if __name__ == '__main__':
 
         wandb.log(make_report(optimizer, candidate, fitness))
         return fitness
+
+    def checkpoint(final=False):
+        recommendation = optimizer.provide_recommendation()
+        fitness = evaluate_candidate(recommendation)
+        summary = {}
+
+        for fitness, program in best_programs:
+            if fitness > MIN_FITNESS:
+                summary[program.uid] = fitness
+                if final:
+                    program.persist = True
+
+        with open(solutions_path / f'{config["OPTIMIZER"]}.json', 'w') as f:
+            j.dump(summary, f)
+
+        optimizer.dump(optimizer_path)
     
     try:
         for _ in range(optimizer.budget):
@@ -186,16 +206,4 @@ if __name__ == '__main__':
             fitness = evaluate_candidate(candidate)
             optimizer.tell(candidate, - fitness)
     finally:
-        recommendation = optimizer.provide_recommendation()
-        fitness = evaluate_candidate(recommendation)
-        summary = {}
-
-        for fitness, program in best_programs:
-            if fitness > MIN_FITNESS:
-                program.persist = True
-                summary[program.uid] = fitness
-
-        with open(solutions_path / f'{config["OPTIMIZER"]}.json', 'w') as f:
-            j.dump(summary, f)
-
-        optimizer.dump(optimizer_path)
+        checkpoint(final=True)
