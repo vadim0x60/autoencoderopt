@@ -14,18 +14,17 @@ from hashlib import blake2b
 COMPILE_SERVER_API = os.environ.get('COMPILE_SERVER_API') or 'https://tree2tree.app/api'
 MIN_FITNESS = float('-inf')
 CHECKPOINT_INTERVAL = os.environ.get('CHECKPOINT_INTERVAL') or 100
+TOP_K = int(os.environ.get('TOP_K') or 10)
+LATENT_DIM = int(os.environ.get('LATENT_DIM') or 150)
 
 h = blake2b(digest_size=8)
 config = {}
 config_str = ''
 
 for config_var, default, constructor in (
-    ('LATENT_DIM', '150', int),
     ('MAX_TESTS', '32', int),
-    ('TOP_K', '10', int),
-    ('TEMPERATURE', '0.5', float),
-    ('BUDGET', '10', int),
     ('RANGE', '6', int),
+    ('BUDGET', '10', int),
     ('OPTIMIZER', 'NGOpt', lambda x: ng.optimizers.registry[x]),
     ('TASK', 'fuel-cost', str)
 ):
