@@ -149,15 +149,16 @@ def make_report(optimizer, candidate, fitness):
     return report
 
 if __name__ == '__main__':
+    experiment_id = str(hash(str(config)))
     try:
-        wandb.init(project='autoencoderopt', config=config, resume=True)
+        wandb.init(project='autoencoderopt', config=config, id=experiment_id)
         assert wandb.run.resumed
 
         solutions_path = Path(wandb.run.dir)
         optimizer_path = solutions_path / f'{config["OPTIMIZER"]}.pickle'
         optimizer = OPTIMIZER.load(optimizer_path)
     except (AssertionError, FileNotFoundError):
-        wandb.init(project='autoencoderopt', config=config, resume=False)
+        wandb.init(project='autoencoderopt', config=config, id=experiment_id)
 
         solutions_path = Path(wandb.run.dir)
         optimizer_path = solutions_path / f'{config["OPTIMIZER"]}.pickle'
