@@ -161,28 +161,17 @@ def make_report(optimizer, candidate, fitness):
     return report
 
 if __name__ == '__main__':
-    try:
-        wandb.init(project='autoencoderopt', config=config, id=config_str)
-        assert wandb.run.resumed
+    wandb.init(project='autoencoderopt', config=config)
 
-        solutions_path = Path(wandb.run.dir)
-        optimizer_path = solutions_path / f'{config["OPTIMIZER"]}.pickle'
-        optimizer = OPTIMIZER.load(optimizer_path)
-    except (AssertionError, FileNotFoundError):
-        wandb.init(project='autoencoderopt', config=config, id=config_str)
-
-        solutions_path = Path(wandb.run.dir)
-        optimizer_path = solutions_path / f'{config["OPTIMIZER"]}.pickle'
-        optimizer = OPTIMIZER(parametrization=ng.p.Array(shape=(LATENT_DIM,), lower=-RANGE, upper=RANGE), budget=BUDGET)
+    solutions_path = Path(wandb.run.dir)
+    optimizer_path = solutions_path / f'{config["OPTIMIZER"]}.pickle'
+    optimizer = OPTIMIZER(parametrization=ng.p.Array(shape=(LATENT_DIM,), lower=-RANGE, upper=RANGE), budget=BUDGET)
 
     best_fitness = MIN_FITNESS
     best_programs = []
 
     for i in range(TOP_K + 1):
         heappush(best_programs, (MIN_FITNESS, Program(i, str(i))))
-
-    if(isinstance(optimizer, ng.optimizers.NGOptBase) and isinstance(optimizer.optim, ng.optimizers.recaster.SequentialRecastOptimizer)):
-        optimizer.optim.enable_pickling()
 
     def evaluate_candidate(candidate):
         global best_fitness
@@ -212,8 +201,6 @@ if __name__ == '__main__':
 
         with open(solutions_path / f'{config["OPTIMIZER"]}.json', 'w') as f:
             j.dump(summary, f)
-
-        optimizer.dump(optimizer_path)
     
     try:
         for idx in range(optimizer.budget):
